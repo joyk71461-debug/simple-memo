@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>간단 메모장</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#fff;color:#222;font-family:system-ui,sans-serif}main{width:min(100% - 32px,560px);margin:40px auto}.card{border:1px solid #ddd;border-radius:12px;padding:20px;margin-bottom:16px}h1{font-size:24px;margin:0 0 16px}input,textarea,button{width:100%;font:inherit;font-size:16px;border-radius:8px;padding:12px}input,textarea{border:1px solid #bbb;margin-bottom:10px}textarea{min-height:120px;resize:vertical}button{border:0;background:#2563eb;color:#fff;cursor:pointer;margin-top:4px}button.secondary{background:#555}button.danger{width:auto;background:#dc2626;padding:8px 12px}.row{display:flex;gap:8px}.row button{width:auto;flex:1}.memo{white-space:pre-wrap;overflow-wrap:anywhere;border-top:1px solid #eee;padding:14px 0}.memo:first-child{border-top:0}.status{min-height:24px;margin:8px 0;color:#555}.error{color:#b91c1c}.hidden{display:none}
+  </style>
+</head>
+<body>
+<main>
+  <h1>간단 메모장</h1>
+  <section id="auth" class="card">
+    <input id="email" type="email" placeholder="이메일" autocomplete="email">
+    <input id="password" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="current-password">
+    <div class="row"><button id="signup">회원가입</button><button id="login">로그인</button></div>
+  </section>
+  <section id="app" class="hidden">
+    <div class="card"><textarea id="content" placeholder="메모 내용을 입력하세요"></textarea><button id="save">저장</button><div id="status" class="status"></div><button id="logout" class="secondary">로그아웃</button></div>
+    <div id="list" class="card"></div>
+  </section>
+</main>
+<script>
+const {createClient}=supabase;
+const db=createClient('https://qrofkvpxpxeopohkyrhb.supabase.co','sb_publishable_uDjDgAJXuhX0F9-i7msZjQ_agiIepQK');
+const $=id=>document.getElementById(id), auth=$('auth'), app=$('app'), status=$('status');
+function message(text,error=false){status.textContent=text;status.className='status'+(error?' error':'')}
+function text(el,value){el.textContent=value}
+async function load(){const {data,error}=await db.from('memos').select('id,content,created_at').order('created_at',{ascending:false});if(error)return message(error.message,true);$('list').replaceChildren();if(!data.length){text($('list'),'저장된 메모가 없습니다.');return}for(const memo of data){const box=document.createElement('div'),body=document.createElement('div'),del=document.createElement('button');box.className='memo';text(body,memo.content);del.className='danger';text(del,'삭제');del.onclick=async()=>{message('삭제 중...');const {error}=await db.from('memos').delete().eq('id',memo.id);if(error)return message(error.message,true);message('삭제했습니다.');load()};box.append(body,del);$('list').append(box)}}
+async function session(){const {data:{session}}=await db.auth.getSession();auth.classList.toggle('hidden',!!session);app.classList.toggle('hidden',!session);if(session)load()}
+$('signup').onclick=async()=>{const {error}=await db.auth.signUp({email:$('email').value,password:$('password').value});if(error){alert(error.message);return}const {data:{session:s}}=await db.auth.getSession();if(!s){alert('가입 확인이 필요합니다.');return}session()};
+$('login').onclick=async()=>{const {error}=await db.auth.signInWithPassword({email:$('email').value,password:$('password').value});if(error)return alert(error.message);session()};
+$('logout').onclick=async()=>{await db.auth.signOut();session()};
+$('save').onclick=async()=>{const content=$('content').value.trim();if(!content)return message('메모를 입력하세요.',true);message('저장 중...');const {data:{user}}=await db.auth.getUser();const {error}=await db.from('memos').insert({user_id:user.id,content});if(error)return message(error.message,true);$('content').value='';message('저장했습니다.');load()};
+db.auth.onAuthStateChange(()=>session());session();
+</script>
+</body>
+</html>
